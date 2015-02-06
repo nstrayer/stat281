@@ -7,10 +7,10 @@ This is a repo for code, data and relevant papers for Stat 281 - Independent Stu
 The format is 
 
 - R scripts in main repo
-- __data__
+- __data/__
 	* Where data for scripts is stored.
-- __figures__
+- __figures/__
 	* Visualization output
-- __papers__
+- __papers/__
 	* Papers read/ cited.
 
