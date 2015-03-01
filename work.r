@@ -26,7 +26,7 @@ ggsave("figures/Obesity_PVal_Hist_Norm.pdf") #Save
 FDRresults = fdrtool(obesity$pvalue, statistic = "pvalue", plot = TRUE)
 obesity$qvalue = FDRresults$qval
 
-#Plot the 
+#Plot qval and pval side by side to see changes.
 P   = ggplot(obesity, aes(x = pvalue)) + geom_histogram(aes(y=..count../sum(..count..)),fill = "#7fc97f", alpha = 0.6) + ylim(0,0.4)
 Q   = ggplot(obesity, aes(x = qvalue)) + geom_histogram(aes(y=..count../sum(..count..)), fill = "#beaed4", alpha = 0.6) + ylim(0,0.4)
 out = arrangeGrob(P,Q,ncol=2, main = "P-Val vs, Q-Val")
