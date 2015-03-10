@@ -1,0 +1,65 @@
+---
+title: "False Discovery Rate"
+author: "Nick Strayer"
+date: "March 10, 2015"
+output: html_document
+---
+
+---
+
+## Requirements: 
+First we load up the neccesary libraries: 
+
+
+```{r}
+library(fdrtool)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+```
+
+
+## Loading in the data: 
+
+Load in the supplied data from the text file: 
+
+```{r}
+setwd("/Users/Nick/spring15/independentStudy")#have to set this by chunk of code
+obesityRaw = read.table("data/obesity_censored.txt", header = TRUE, fill = TRUE)
+obesity = na.omit(obesityRaw) #There are some NAs in the data.
+```
+
+## P Value Histogram: 
+
+Generate a simple histogram of the p values of the words: 
+
+```{r, fig.align = "center"}
+ggplot(obesity, aes(x = pvalue)) + 
+  geom_histogram(aes(y=..count../sum(..count..)), color = "black", fill = "#7fc97f") + 
+  labs(title = "Histogram of p-values for obesity words (normalized)",
+      x = "P-Value", y = "% of words at p-val")
+
+#ggsave("figures/Obesity_PVal_Hist_Norm.pdf") #Save
+```
+
+## FDR Analysis: 
+
+Run the data through the FDR package. 
+
+```{r, fig.height= 11, fig.align="center"}
+FDRresults = fdrtool(obesity$pvalue, statistic = "pvalue", plot = TRUE)
+obesity$qvalue = FDRresults$qval
+```
+
+## P Value vs Q Value: 
+
+```{r, fig.width=9, fig.align="center"}
+P = ggplot(obesity, aes(x = pvalue)) + 
+  geom_histogram(aes(y=..count../sum(..count..)),fill = "#7fc97f", alpha = 0.6) + ylim(0,0.4)
+Q = ggplot(obesity, aes(x = qvalue)) + 
+  geom_histogram(aes(y=..count../sum(..count..)), fill = "#beaed4", alpha = 0.6) + ylim(0,0.4)
+
+Plot = arrangeGrob(P,Q,ncol=2, main = "P-Val vs, Q-Val")
+Plot
+#ggsave("figures/Obesity_PVal_vs_Qval.pdf",out) #Save
+```
