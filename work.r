@@ -11,7 +11,6 @@ require(fdrtool)
 require(ggplot2)
 library(gridExtra)
 
-
 obesityRaw = read.table("data/obesity_censored.txt", header = TRUE, fill = TRUE)
 obesity = na.omit(obesityRaw) #There are some NAs in the data.
 
