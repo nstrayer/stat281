@@ -55,11 +55,24 @@ obesity$qvalue = FDRresults$qval
 
 ```{r, fig.width=9, fig.align="center"}
 P = ggplot(obesity, aes(x = pvalue)) + 
-  geom_histogram(aes(y=..count../sum(..count..)),fill = "#7fc97f", alpha = 0.6) + ylim(0,0.4)
+  geom_histogram(aes(y=..count../sum(..count..)), fill = "#7fc97f", alpha = 0.6) + ylim(0,0.4)
 Q = ggplot(obesity, aes(x = qvalue)) + 
   geom_histogram(aes(y=..count../sum(..count..)), fill = "#beaed4", alpha = 0.6) + ylim(0,0.4)
 
 Plot = arrangeGrob(P,Q,ncol=2, main = "P-Val vs, Q-Val")
 Plot
 #ggsave("figures/Obesity_PVal_vs_Qval.pdf",out) #Save
+```
+
+## Manually Calculating the FDR. 
+
+The Storey and Tibshirani include the formula: 
+$$\widehat{FDR}(t) = \frac{\hat{\pi_0 m \cdot t}}{S(t)}$$
+
+```{r}
+ggplot(obesity, aes(x = pvalue)) + 
+  geom_histogram(aes(y=..count../sum(..count..)), color = "black", fill = "#7fc97f") + 
+  geom_hline(yintercept = .015) +
+  labs(title = "Histogram of p-values for obesity words (normalized)",
+      x = "P-Value", y = "% of words at p-val")
 ```

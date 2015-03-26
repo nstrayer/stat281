@@ -19,3 +19,8 @@ The format is
 	* Papers read/ cited.
 
 
+## To Do: 
+
+- Calculate the min(FDR) 
+
+![formula](/formula.png)
