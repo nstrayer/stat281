@@ -1,0 +1,120 @@
+---
+title: "Calculating the q-value"
+author: "Nick Strayer"
+date: "April 4, 2015"
+output: html_document
+---
+
+We will be using the algorithm for calculating the q-value for a given p-value given an array of p-values from Storey and Tibshiran, 2003.
+
+```{r echo = FALSE}
+library(fdrtool)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(plyr)
+library(pspline)
+```
+
+
+--- 
+
+## First we load in the data from the hedonometer paper: 
+
+```{r}
+setwd("/Users/Nick/spring15/independentStudy")#have to set this by chunk of code
+obesityRaw = read.table("data/obesity_censored.txt", header = TRUE, fill = TRUE)
+obesity = na.omit(obesityRaw) #There are some NAs in the data.
+head(obesity)
+```
+
+Now we will set up an object that we will use throughout the process: 
+
+```{r, fig.align='center'}
+tests = data.frame(obesity$WordHappiness, obesity$pvalue)
+names(tests) = c("word", "pval")
+head(tests)
+```
+```{r echo = FALSE, fig.align='center'}
+
+ggplot(tests, aes(x = pval)) + 
+  geom_histogram(aes(y=..count../sum(..count..)), color = "black", fill = "#7fc97f") + 
+  labs(title = "Histogram of p-values for obesity words (normalized)",
+      x = "P-Value", y = "% of words at p-val")
+```
+
+## Now the algorithm: 
+
+### 1) Order the p-values. 
+__Note:__ The data are already in order, but I will include the step anyways.
+```{r}
+tests = arrange(tests, pval)
+head(tests)
+```
+
+### 2) Look at the potential $\hat{\pi_0}(\lambda)$ values: 
+
+$\hat{\pi_0}(\lambda)=\frac{\#\{p_i>\lambda\}}{m(1-\lambda)}$
+```{r, fig.align='center'}
+#Generate lambdas
+m = length(tests$pval)
+lambdas = seq(0.01,0.95,0.01)
+piHat   = sapply(lambdas, function(l) sum(tests$pval > l)/m*(1 - l) )
+
+piHat_df = data.frame(lambdas, piHat)
+
+ggplot(piHat_df,aes(x=lambdas, y=piHat)) + geom_point() 
+```
+
+### 3) Fit a spline to the $\hat{\pi_0}$ values
+__Note__: Not super sure why the spline is so weird. Investigating further methods of modeling this trend could be useful. 
+
+
+```{r, fig.align='center'}
+spline = smooth.Pspline(lambdas,piHat, norder = 3, df = 3, method = 2)
+
+piHat_df$spline = spline$ysmth
+
+ggplot(piHat_df,aes(x=lambdas)) + geom_point(aes(y = piHat)) + geom_line(aes(y = spline))
+```
+
+### 4) Set $\hat{\pi_0}$ to the spline at 1. 
+
+```{r}
+pi0 = predict(spline, 1)
+print(pi0)
+```
+
+### 5) Calculate $\hat{q_{m}}$
+$$\hat{q_{m}} = \hat{\pi_o} \cdot p_m$$
+```{r}
+#Start the array of values by putting in the last one
+qvals = pi0 * tail(tests$pval, 1)
+```
+
+### 6) Find all of the rest of the q vals: 
+
+$$min((\hat{\pi_o} \cdot m \cdot p_i)/i, q_{i + 1})$$
+
+```{r}
+
+for(i in (m-1):1 ){
+  
+  latest = pi0 * m * tests$pval[i]/ i
+  last   = qvals[1] #because we are filling qvals reverse, 1 will always be the last computed val
+  
+  q = min(latest, last)
+  qvals = c(q, qvals)
+}
+
+tests$qval = qvals
+
+head(tests)
+```
+
+
+---
+### Point of note: 
+
+* I think it would be interesting to look more into the distribution of $\hat{pi}$ and also the type of curve fitted to it. 
+
