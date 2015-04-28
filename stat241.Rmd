@@ -1,0 +1,173 @@
+---
+title: "The Q-Value for Multiple Comparison Correction"
+author: "Nick Strayer"
+date: "April 24, 2015"
+output: pdf_document
+graphics: yes
+---
+
+We will be using the algorithm outlined in Storey and Tibshiran, 2003 for multiple comparison corrections. The algorithm uses a metric known as the "q-value" for finding significance. Its input is an array of p-values. 
+
+## Testing Data:
+
+For this process we will be using data from the UVM Complex Systems Center to test the algorithm. Specifically a list of words most associated with obesity in a given population.
+
+The [Hedonometer](http://hedonometer.org/index.html) is a tool gathering data from twitter to help guage happiness in a population on a macro scale. 
+
+Througout this writeup I will refer to the input data in two forms: `word` which is an array of the feature names and `pval` which is an array of the associated p-values. The data we are dealing with comes in the following form: 
+
+```{r echo = FALSE}
+library(fdrtool)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(plyr)
+library(pspline)
+
+setwd("/Users/Nick/spring15/independentStudy")#have to set this by chunk of code
+obesityRaw = read.table("data/obesity_censored.txt", header = TRUE, fill = TRUE)
+obesity = na.omit(obesityRaw) #There are some NAs in the data.
+
+tests = data.frame(obesity$WordHappiness, obesity$pvalue)
+names(tests) = c("word", "pval")
+head(tests)
+```
+--- 
+
+## The algorithm: 
+
+### 1) Order the p-values. 
+```{r}
+tests = arrange(tests, pval)
+head(tests)
+```
+
+### 2) Look at the potential $\hat{\pi_0}(\lambda)$ values: 
+
+This will eventually help us arrive at an estimate for the proportion of features which are truly null ($\pi_0$). This is roughly equivalent to drawing a horizontal line at the point on the histogram of p-values where the distribution flattens and recording the y-axis value. 
+
+$$\hat{\pi_0}(\lambda)=\frac{\#\{p_i>\lambda\}}{m(1-\lambda)}$$
+```{r, fig.align='center'}
+#Get length of data/ number of tests performed
+m = length(tests$pval)
+#Generate lambdas
+lambdas = seq(0.01,0.95,0.01)
+#Generate pi hats
+piHat   = sapply(lambdas, function(l) sum(tests$pval > l)/m*(1 - l) )
+#Build dataframe
+piHat_df = data.frame(lambdas, piHat)
+#Plot to see what we have
+ggplot(piHat_df,aes(x=lambdas, y=piHat)) + geom_point() 
+```
+
+### 3) Fit a curve to the $\hat{\pi_0}$ values
+__Note__: These data don't respond as well to a natural cubic spline as is called for in the paper. See the end of this report on explorations of different methods of finding $\pi_0$.  
+
+```{r, fig.align='center'}
+spline = smooth.Pspline(lambdas,piHat, norder = 3, df = 3, method = 2)
+
+piHat_df$spline = spline$ysmth
+
+ggplot(piHat_df,aes(x=lambdas)) + geom_point(aes(y = piHat)) + geom_line(aes(y = spline))
+```
+
+### 4) Set $\hat{\pi_0}$ to the spline at 1. 
+
+```{r}
+pi0 = predict(spline, 1)
+print(pi0[1,1])
+```
+
+### 5) Calculate $\hat{q_{m}}$
+
+To find the q-values we start from the bottom and work our way up to the most significant test. This is because the algorithm calls for us to assign a given test's q-value based upon the false discovery rate of all less significant tests. 
+
+$$\hat{q_{m}} = \hat{\pi_o} \cdot p_m$$
+```{r}
+#Start the array of values by putting in the last one
+qvals = pi0 * tail(tests$pval, 1)
+```
+
+### 6) Find all of the rest of the q vals: 
+
+$$min((\hat{\pi_o} \cdot m \cdot p_i)/i, q_{i + 1})$$
+
+```{r}
+
+for(i in (m-1):1 ){
+  
+  latest = pi0 * m * tests$pval[i]/ i
+  last   = qvals[1] #because we are filling qvals reverse, 1 will always be the last computed val
+  
+  q = min(latest, last)
+  qvals = c(q, qvals)
+}
+
+tests$qval = qvals
+
+head(tests)
+```
+
+
+# Histogram of the resultant q-values: 
+```{r echo = FALSE, fig.align='center'}
+ggplot(tests, aes(x = qvals)) + 
+  geom_histogram(aes(y=..count../sum(..count..)), color = "black", fill = "#7fc97f") + 
+  labs(title = "Histogram of q-values for obesity words (normalized)",
+      x = "q-value", y = "% of words at q-val") 
+```
+
+Compare that with the histogram of the p-values (note the x-scale):  
+
+```{r echo = FALSE, fig.align='center'}
+ggplot(tests, aes(x = pval)) + 
+  geom_histogram(aes(y=..count../sum(..count..)), color = "black", fill = "#7fc97f") + 
+  labs(title = "Histogram of p-values for obesity words (normalized)",
+      x = "P-Value", y = "% of words at p-val") + xlim(c(0,1))
+```
+
+---
+### Point of note: 
+
+* I think it would be interesting to look more into the distribution of $\hat{pi}$ and also the type of curve fitted to it. 
+
+Here are a couple of extremely simple transformations applied to the data (log and square root respectively.) I have fitted a simple linear regression model to each transformation as well. 
+
+```{r echo =FALSE,fig.width=9,fig.height=10, fig.align='center'}
+lambda = piHat_df$lambdas
+piHat  = piHat_df$piHat
+
+par(mfrow = c(3,2))
+plot(lambda, log(piHat))
+abline(lm(log(piHat)~lambda))
+
+plot(lambda, sqrt(piHat))
+abline(lm(sqrt(piHat)~lambda))
+
+plot(log(lambda), piHat)
+abline(lm(piHat~log(lambda)))
+
+plot(sqrt(lambda), piHat)
+abline(lm(piHat ~ sqrt(lambda)))
+
+plot(log(lambda), log(piHat))
+abline(lm(log(piHat) ~ log(lambda)))
+
+plot(sqrt(lambda), sqrt(piHat))
+abline(lm(sqrt(piHat) ~ sqrt(lambda)))
+```
+
+## Something looks right with that last plot. 
+Let's see what type of $\pi_0$ it gives us. 
+
+```{r}
+model = lm(sqrt(piHat) ~ sqrt(lambda))
+pi_zero = predict.lm(model, data.frame(lambda=1, piHat=0))[1] 
+print(pi_zero)
+```
+
+#Discussion: 
+
+In an ideal world the algorithm for choosing a $\pi_0$ automatically would pick a value around .03 for this dataset (where the p-value histogram appears to level out on the y axis). The natural cubic spline method described in the paper picks .06 which is clearly way too high. By taking a double square root translation of the data and fitting a simple linear model we are able to obtain a $\pi_0$ estimate of 0.023 which is much closer to what we are looking for. 
+
+It must be noted however, that if we 'un-square' the estimate provided by the double squared prediction we get a much much lower value (.005). More data are neccesary to test if this is a good alternative method to a natural cubic spline. 
